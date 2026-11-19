@@ -1,0 +1,34 @@
+{
+    "schemaVersion": 1,
+    "id": "itemtransformer",
+    "version": "${version}",
+    "name": "ItemTransformer",
+    "description": "Enables block-family transforms (e.g. oak_planks -> oak_stairs) by hooking into ItemSwapper's palette.",
+    "authors": [
+        "Notoriousi"
+    ],
+    "contact": {
+        "sources": "https://github.com/Notoriousi/ItemTransformer"
+    },
+    "license": "LGPL-3.0-only",
+    "icon": "",
+    "environment": "*",
+    "entrypoints": {
+        "main": [
+            "dev.tr7zw.itemtransformer.ItemTransformerMod"
+        ],
+        "client": [
+            "dev.tr7zw.itemtransformer.ItemTransformerClientMod"
+        ]
+    },
+    "mixins": [
+        "itemtransformer.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=0.15.0",
+        "minecraft": "=26.3",
+        "java": ">=25",
+        "fabric-api": "*",
+        "itemswapper": "*"
+    }
+}

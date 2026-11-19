@@ -1,0 +1,15 @@
+{
+    "required": true,
+    "minVersion": "0.8",
+    "package": "dev.tr7zw.itemtransformer.client",
+    "compatibilityLevel": "JAVA_21",
+    "mixins": [],
+    "client": [
+        "PaletteWidgetMixin",
+        "PaletteRenderMixin",
+        "PaletteAvailabilityMixin"
+    ],
+    "injectors": {
+        "defaultRequire": 1
+    }
+}
