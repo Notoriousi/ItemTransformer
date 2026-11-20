@@ -115,7 +115,7 @@ public abstract class PaletteWidgetMixin {
         var inv = client.player.getInventory();
         int i = 0;
         for (ItemStack stack : inv) {
-            if (i != heldSlot && !stack.isEmpty() && ShulkerUtil.isShulkerBox(stack)) {
+            if (i != heldSlot && !stack.isEmpty() && ShulkerUtil.isShulkerBox(stack) && stack.getCount() == 1) {
                 var contents = ShulkerUtil.getContents(stack);
                 for (int sub = 0; sub < contents.size(); sub++) {
                     ItemStack inner = contents.get(sub);

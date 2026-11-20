@@ -40,6 +40,10 @@ public class ItemTransformerMod implements ModInitializer {
                 ServerPlayer player = context.player();
                 int heldSlot = payload.heldSlot();
                 int sourceSlot = payload.sourceSlot();
+                if (!isValidSlot(heldSlot) || !isValidSlot(sourceSlot)) {
+                    LOGGER.warn("ItemTransformer: invalid slot index (held={}, source={})", heldSlot, sourceSlot);
+                    return;
+                }
 
                 Item targetItem = BuiltInRegistries.ITEM
                     .getOptional(payload.targetItemId()).orElse(null);
@@ -133,6 +137,10 @@ public class ItemTransformerMod implements ModInitializer {
                 int heldSlot = payload.heldSlot();
                 int shulkerSlot = payload.shulkerSlot();
                 int shulkerSubSlot = payload.shulkerSubSlot();
+                if (!isValidSlot(heldSlot) || !isValidSlot(shulkerSlot) || shulkerSubSlot < 0) {
+                    LOGGER.warn("ItemTransformer: [shulker] invalid slot index (held={}, box={}, sub={})", heldSlot, shulkerSlot, shulkerSubSlot);
+                    return;
+                }
 
                 Item targetItem = BuiltInRegistries.ITEM
                     .getOptional(payload.targetItemId()).orElse(null);
@@ -142,13 +150,13 @@ public class ItemTransformerMod implements ModInitializer {
                 }
 
                 ItemStack shulkerStack = player.getInventory().getItem(shulkerSlot);
-                if (!ShulkerUtil.isShulkerBox(shulkerStack)) {
-                    player.sendSystemMessage(Component.literal("\u00a7cInvalid shulker box"), true);
+                if (!ShulkerUtil.isShulkerBox(shulkerStack) || shulkerStack.getCount() > 1) {
+                    player.sendSystemMessage(Component.literal("\u00a7cInvalid or stacked shulker box"), true);
                     return;
                 }
 
                 var contents = ShulkerUtil.getContents(shulkerStack);
-                if (shulkerSubSlot < 0 || shulkerSubSlot >= contents.size()) return;
+                if (shulkerSubSlot >= contents.size()) return;
                 ItemStack sourceStack = contents.get(shulkerSubSlot);
                 if (sourceStack.isEmpty()) return;
 
@@ -185,6 +193,12 @@ public class ItemTransformerMod implements ModInitializer {
                 }
 
                 ItemStack heldStack = player.getInventory().getItem(heldSlot);
+                // Shulker boxes can't nest inside each other (would desync).
+                if (ShulkerUtil.isShulkerBox(heldStack)) {
+                    LOGGER.warn("ItemTransformer: [shulker] refused to store a shulker box inside a shulker box");
+                    player.sendSystemMessage(Component.literal("\u00a7cCannot store a shulker box inside a shulker box."), true);
+                    return;
+                }
                 placeOverflow(player, heldSlot, targetItem, -1, shulkerSlot, shulkerSubSlot, toCount);
                 ShulkerUtil.setSlot(shulkerStack, shulkerSubSlot, heldStack);
 
@@ -226,7 +240,7 @@ public class ItemTransformerMod implements ModInitializer {
                 if (i != heldSlot) {
                     pool += st.getCount();
                 }
-            } else if (ShulkerUtil.isShulkerBox(st)) {
+            } else if (ShulkerUtil.isShulkerBox(st) && st.getCount() == 1) {
                 for (ItemStack inner : ShulkerUtil.getContents(st)) {
                     if (inner.is(sourceItem)) {
                         total += inner.getCount();
@@ -284,10 +298,10 @@ public class ItemTransformerMod implements ModInitializer {
                 amount -= take;
             }
         }
-        // Shulker boxes.
+        // Shulker boxes (skip stacked — writing to one duplicates into the whole stack).
         for (int i = 0; i < items.size() && amount > 0; i++) {
             ItemStack box = player.getInventory().getItem(i);
-            if (!ShulkerUtil.isShulkerBox(box)) {
+            if (!ShulkerUtil.isShulkerBox(box) || box.getCount() > 1) {
                 continue;
             }
             var contents = ShulkerUtil.getContents(box);
@@ -326,10 +340,10 @@ public class ItemTransformerMod implements ModInitializer {
                 }
             }
         }
-        // Free shulker slots.
+        // Free shulker slots (skip stacked — writing to one duplicates into the whole stack).
         for (int i = 0; i < items.size(); i++) {
             ItemStack s = items.get(i);
-            if (!ShulkerUtil.isShulkerBox(s)) {
+            if (!ShulkerUtil.isShulkerBox(s) || s.getCount() > 1) {
                 continue;
             }
             var contents = ShulkerUtil.getContents(s);
@@ -371,10 +385,10 @@ public class ItemTransformerMod implements ModInitializer {
             }
         }
 
-        // 3) Free slots inside shulker boxes held in the inventory.
+        // 3) Free slots inside shulker boxes (skip stacked to prevent duplication).
         for (int i = 0; i < items.size() && remaining > 0; i++) {
             ItemStack s = items.get(i);
-            if (!ShulkerUtil.isShulkerBox(s)) {
+            if (!ShulkerUtil.isShulkerBox(s) || s.getCount() > 1) {
                 continue;
             }
             var contents = ShulkerUtil.getContents(s);
@@ -393,5 +407,10 @@ public class ItemTransformerMod implements ModInitializer {
         if (remaining > 0) {
             LOGGER.warn("ItemTransformer: could not place {} converted item(s) (no space)", remaining);
         }
+    }
+
+    /** Is the slot a valid player-inventory slot (0-39, not the ender chest)? */
+    private static boolean isValidSlot(int slot) {
+        return slot >= 0 && slot <= 39;
     }
 }

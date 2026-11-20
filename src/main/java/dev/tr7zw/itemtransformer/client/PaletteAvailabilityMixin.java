@@ -83,7 +83,7 @@ public abstract class PaletteAvailabilityMixin {
         var inv = client.player.getInventory();
         for (ItemStack stack : inv) {
             if (stack.is(item)) return true;
-            if (ShulkerUtil.isShulkerBox(stack)) {
+            if (ShulkerUtil.isShulkerBox(stack) && stack.getCount() == 1) {
                 for (ItemStack inner : ShulkerUtil.getContents(stack)) {
                     if (inner.is(item)) return true;
                 }
@@ -101,7 +101,7 @@ public abstract class PaletteAvailabilityMixin {
         for (ItemStack stack : inv) {
             if (stack.is(item)) {
                 count += stack.getCount();
-            } else if (ShulkerUtil.isShulkerBox(stack)) {
+            } else if (ShulkerUtil.isShulkerBox(stack) && stack.getCount() == 1) {
                 for (ItemStack inner : ShulkerUtil.getContents(stack)) {
                     if (inner.is(item)) count += inner.getCount();
                 }
