@@ -92,7 +92,6 @@ public abstract class PaletteAvailabilityMixin {
         return false;
     }
 
-    /** Total count of an item across all inventory slots. */
     private int getInventoryCount(Item item) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null) return 0;

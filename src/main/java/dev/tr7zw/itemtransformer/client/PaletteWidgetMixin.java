@@ -49,7 +49,6 @@ public abstract class PaletteWidgetMixin {
         Item toItem = entry.getItem();
         if (toItem == null || fromItem == toItem) return;
 
-        // Case 1: Direct transform.
         if (ItemFamilyUtil.canTransformTo(fromItem, toItem)
                 && ItemFamilyUtil.canConvert(held, toItem)) {
             sendTransform(toItem, selectedSlot, selectedSlot);
@@ -57,7 +56,6 @@ public abstract class PaletteWidgetMixin {
             return;
         }
 
-        // Case 2: Transform + swap from inventory.
         int sourceSlot = findTransformableSource(selectedSlot, toItem);
         if (sourceSlot != -1) {
             sendTransform(toItem, selectedSlot, sourceSlot);
@@ -65,7 +63,6 @@ public abstract class PaletteWidgetMixin {
             return;
         }
 
-        // Case 3: Transform + swap from Shulker Box.
         int[] shulkerResult = findTransformableInShulker(selectedSlot, toItem);
         if (shulkerResult != null) {
             sendShulkerTransform(toItem, selectedSlot, shulkerResult[0], shulkerResult[1]);
@@ -73,10 +70,8 @@ public abstract class PaletteWidgetMixin {
             return;
         }
 
-        // No valid transform — fall through.
     }
 
-    /** First inventory slot (≠ heldSlot) that can transform into `target`. */
     private int findTransformableSource(int heldSlot, Item target) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null) return -1;
@@ -107,7 +102,6 @@ public abstract class PaletteWidgetMixin {
         }
     }
 
-    /** First transformable source inside any shulker box. Returns {slot, subSlot} or null. */
     private int[] findTransformableInShulker(int heldSlot, Item target) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.player == null) return null;

@@ -19,6 +19,9 @@
         ],
         "client": [
             "dev.tr7zw.itemtransformer.ItemTransformerClientMod"
+        ],
+        "modmenu": [
+            "dev.tr7zw.itemtransformer.ItemTransformerModMenu"
         ]
     },
     "mixins": [
@@ -30,5 +33,8 @@
         "java": ">=25",
         "fabric-api": "*",
         "itemswapper": "*"
+    },
+    "suggests": {
+        "modmenu": "*"
     }
 }

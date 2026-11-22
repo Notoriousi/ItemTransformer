@@ -25,7 +25,6 @@ public class ItemTransformerMod implements ModInitializer {
         LOGGER.info("[ItemTransformer] Mod entrypoint initialized (main)");
 
         try {
-            // Register payload types.
             PayloadTypeRegistry.serverboundPlay().register(
                 TransformItemPayload.TYPE, TransformItemPayload.STREAM_CODEC);
             PayloadTypeRegistry.serverboundPlay().register(
@@ -35,7 +34,6 @@ public class ItemTransformerMod implements ModInitializer {
             PayloadTypeRegistry.clientboundPlay().register(
                 ServerProbeResponsePayload.TYPE, ServerProbeResponsePayload.STREAM_CODEC);
 
-            // Server handler.
             ServerPlayNetworking.registerGlobalReceiver(TransformItemPayload.TYPE, (payload, context) -> {
                 ServerPlayer player = context.player();
                 int heldSlot = payload.heldSlot();
@@ -71,7 +69,6 @@ public class ItemTransformerMod implements ModInitializer {
                     return;
                 }
 
-                // Aggregation: pool source across inventory + shulker boxes.
                 if (ItemFamilyUtil.itemCost(sourceItem) < ItemFamilyUtil.itemCost(targetItem)
                         && player.getInventory().getItem(heldSlot).is(sourceItem)) {
                     if (!transformAggregated(player, heldSlot, sourceItem, targetItem)) {
@@ -83,9 +80,11 @@ public class ItemTransformerMod implements ModInitializer {
                     }
                     LOGGER.info("ItemTransformer: aggregated {} -> {} (held {})",
                         sourceItem, targetItem, heldSlot);
-                    player.sendSystemMessage(
-                        Component.literal("\u00a7aTransformed to " +
-                            BuiltInRegistries.ITEM.getKey(targetItem)), true);
+                    if (ItemTransformerConfig.get().showTransformFeedback) {
+                        player.sendSystemMessage(
+                            Component.literal("\u00a7aTransformed to " +
+                                BuiltInRegistries.ITEM.getKey(targetItem)), true);
+                    }
                     return;
                 }
 
@@ -126,12 +125,22 @@ public class ItemTransformerMod implements ModInitializer {
                         sourceItem, sourceSlot, targetItem, heldSlot, toCount);
                 }
 
-                player.sendSystemMessage(
-                    Component.literal("\u00a7aTransformed to " +
-                        BuiltInRegistries.ITEM.getKey(targetItem)), true);
+                int srcCost = ItemFamilyUtil.itemCost(sourceItem);
+                int tgtCost = ItemFamilyUtil.itemCost(targetItem);
+                int consumed = toCount * tgtCost / srcCost;
+                int leftoverCount = sourceStack.getCount() - consumed;
+                if (leftoverCount > 0) {
+                    placeLeftover(player, sourceItem, leftoverCount,
+                        payload.isDirectTransform() ? heldSlot : sourceSlot);
+                }
+
+                if (ItemTransformerConfig.get().showTransformFeedback) {
+                    player.sendSystemMessage(
+                        Component.literal("\u00a7aTransformed to " +
+                            BuiltInRegistries.ITEM.getKey(targetItem)), true);
+                }
             });
 
-            // Server handler: shulker transform.
             ServerPlayNetworking.registerGlobalReceiver(TransformShulkerPayload.TYPE, (payload, context) -> {
                 ServerPlayer player = context.player();
                 int heldSlot = payload.heldSlot();
@@ -202,14 +211,24 @@ public class ItemTransformerMod implements ModInitializer {
                 placeOverflow(player, heldSlot, targetItem, -1, shulkerSlot, shulkerSubSlot, toCount);
                 ShulkerUtil.setSlot(shulkerStack, shulkerSubSlot, heldStack);
 
+                int srcCost = ItemFamilyUtil.itemCost(sourceItem);
+                int tgtCost = ItemFamilyUtil.itemCost(targetItem);
+                int consumed = toCount * tgtCost / srcCost;
+                int leftoverCount = sourceStack.getCount() - consumed;
+                if (leftoverCount > 0) {
+                    placeLeftoverInShulker(player, sourceItem, leftoverCount,
+                        shulkerSlot, shulkerSubSlot);
+                }
+
                 LOGGER.info("ItemTransformer: [shulker] {} (box={} sub={}) -> {} (held={}, count {})",
                     sourceItem, shulkerSlot, shulkerSubSlot, targetItem, heldSlot, toCount);
-                player.sendSystemMessage(
-                    Component.literal("\u00a7aTransformed to " +
-                        BuiltInRegistries.ITEM.getKey(targetItem) + " (from shulker)"), true);
+                if (ItemTransformerConfig.get().showTransformFeedback) {
+                    player.sendSystemMessage(
+                        Component.literal("\u00a7aTransformed to " +
+                            BuiltInRegistries.ITEM.getKey(targetItem) + " (from shulker)"), true);
+                }
             });
 
-            // Server handler: probe response.
             ServerPlayNetworking.registerGlobalReceiver(ServerProbePayload.TYPE, (payload, context) -> {
                 LOGGER.info("ItemTransformer: received probe from {}", context.player().getName().getString());
                 context.responseSender().sendPacket(new ServerProbeResponsePayload());
@@ -221,7 +240,6 @@ public class ItemTransformerMod implements ModInitializer {
         }
     }
 
-    /** Pools source across inventory + shulkers for cheaper -> pricier transforms. */
     private static boolean transformAggregated(ServerPlayer player, int heldSlot,
             Item sourceItem, Item targetItem) {
         int srcCost = ItemFamilyUtil.itemCost(sourceItem);
@@ -258,31 +276,71 @@ public class ItemTransformerMod implements ModInitializer {
             return false;
         }
 
-        // Cap output at one stack.
         int maxStack = targetItem.getDefaultMaxStackSize();
         if (toCount > maxStack) {
             toCount = maxStack;
         }
 
-        // Consume from pool (held slot is destination, not double-counted).
         long toConsume = (long) toCount * tgtCost / srcCost;
-        int heldCount = player.getInventory().getItem(heldSlot).getCount();
-        long poolToConsume = Math.max(0, toConsume - heldCount);
-        consumeSourceFromPool(player, heldSlot, sourceItem, Math.min(poolToConsume, pool));
+        // Safety: never consume more than what we actually have.
+        if (toConsume > total) {
+            toConsume = total;
+        }
 
-        // Place target in held slot, overflow to inventory/shulkers.
+        int heldCount = player.getInventory().getItem(heldSlot).getCount();
+        long poolToConsume = Math.min(toConsume, pool);
+        long heldToConsume = toConsume - poolToConsume;
+
+        // Save leftover from held slot (what placeOverflow will overwrite).
+        ItemStack heldLeftover = ItemStack.EMPTY;
+        ItemStack heldStack = player.getInventory().getItem(heldSlot);
+        if (heldToConsume > 0 && heldStack.is(sourceItem)) {
+            int leftover = heldCount - (int) heldToConsume;
+            if (leftover > 0) {
+                heldLeftover = new ItemStack(sourceItem, leftover);
+            }
+        }
+
+        consumeSourceFromPool(player, heldSlot, sourceItem, (int) poolToConsume);
+
         placeOverflow(player, heldSlot, targetItem, -1, -1, -1, toCount);
+
+        if (!heldLeftover.isEmpty()) {
+            boolean placed = false;
+            var allItems = player.getInventory().getNonEquipmentItems();
+            for (int i = 0; i < allItems.size() && !placed; i++) {
+                if (i == heldSlot) continue;
+                if (allItems.get(i).isEmpty()) {
+                    player.getInventory().setItem(i, heldLeftover);
+                    placed = true;
+                }
+            }
+            if (!placed) {
+                for (int i = 0; i < allItems.size() && !placed; i++) {
+                    ItemStack s = allItems.get(i);
+                    if (!ShulkerUtil.isShulkerBox(s) || s.getCount() > 1) continue;
+                    var contents = ShulkerUtil.getContents(s);
+                    for (int sub = 0; sub < contents.size() && !placed; sub++) {
+                        if (contents.get(sub).isEmpty()) {
+                            ShulkerUtil.setSlot(s, sub, heldLeftover);
+                            placed = true;
+                        }
+                    }
+                }
+            }
+            if (!placed) {
+                LOGGER.warn("ItemTransformer: could not place {} leftover {} item(s)", heldLeftover.getCount(), sourceItem);
+            }
+        }
         return true;
     }
 
-    /** Consumes `amount` of `sourceItem` from inventory and shulkers (excluding held slot). */
     private static void consumeSourceFromPool(ServerPlayer player, int heldSlot,
             Item sourceItem, long amount) {
         if (amount <= 0) {
             return;
         }
         var items = player.getInventory().getNonEquipmentItems();
-        // Main inventory (excluding held slot).
         for (int i = 0; i < items.size() && amount > 0; i++) {
             if (i == heldSlot) {
                 continue;
@@ -328,7 +386,6 @@ public class ItemTransformerMod implements ModInitializer {
         }
         var items = player.getInventory().getNonEquipmentItems();
         int free = 0;
-        // Empty inventory slots.
         for (int i = 0; i < items.size(); i++) {
             if (i == destMainSlot || i == reservedMainSlot) {
                 continue;
@@ -362,18 +419,15 @@ public class ItemTransformerMod implements ModInitializer {
         return free >= extraNeeded;
     }
 
-    /** Places converted output into destination slot, then overflow to inventory/shulkers. */
     private static void placeOverflow(ServerPlayer player, int destMainSlot, Item to,
             int reservedMainSlot, int reservedBoxSlot, int reservedBoxSubSlot, int toCount) {
         int maxSize = to.getDefaultMaxStackSize();
         var items = player.getInventory().getNonEquipmentItems();
 
-        // 1) Destination slot gets the first (possibly full) stack.
         int first = Math.min(toCount, maxSize);
         player.getInventory().setItem(destMainSlot, new ItemStack(to, first));
         int remaining = toCount - first;
 
-        // 2) Empty main inventory slots.
         for (int i = 0; i < items.size() && remaining > 0; i++) {
             if (i == destMainSlot || i == reservedMainSlot) {
                 continue;
@@ -409,7 +463,71 @@ public class ItemTransformerMod implements ModInitializer {
         }
     }
 
-    /** Is the slot a valid player-inventory slot (0-39, not the ender chest)? */
+    private static void placeLeftover(ServerPlayer player, Item item, int count, int occupiedSlot) {
+        var items = player.getInventory().getNonEquipmentItems();
+
+        for (int i = 0; i < items.size(); i++) {
+            if (i == occupiedSlot) continue;
+            if (items.get(i).isEmpty()) {
+                player.getInventory().setItem(i, new ItemStack(item, count));
+                return;
+            }
+        }
+
+        for (int i = 0; i < items.size(); i++) {
+            ItemStack s = items.get(i);
+            if (!ShulkerUtil.isShulkerBox(s) || s.getCount() > 1) continue;
+            var contents = ShulkerUtil.getContents(s);
+            for (int sub = 0; sub < contents.size(); sub++) {
+                if (contents.get(sub).isEmpty()) {
+                    ShulkerUtil.setSlot(s, sub, new ItemStack(item, count));
+                    return;
+                }
+            }
+        }
+
+        LOGGER.warn("ItemTransformer: could not place {} leftover {} item(s)", count, item);
+    }
+
+    private static void placeLeftoverInShulker(ServerPlayer player, Item item, int count,
+            int shulkerSlot, int shulkerSubSlot) {
+        ItemStack shulkerStack = player.getInventory().getItem(shulkerSlot);
+        if (ShulkerUtil.isShulkerBox(shulkerStack) && shulkerStack.getCount() == 1) {
+            var contents = ShulkerUtil.getContents(shulkerStack);
+            for (int sub = 0; sub < contents.size(); sub++) {
+                if (sub == shulkerSubSlot) continue;
+                if (contents.get(sub).isEmpty()) {
+                    ShulkerUtil.setSlot(shulkerStack, sub, new ItemStack(item, count));
+                    return;
+                }
+            }
+        }
+
+        var items = player.getInventory().getNonEquipmentItems();
+        for (int i = 0; i < items.size(); i++) {
+            if (i == shulkerSlot) continue;
+            if (items.get(i).isEmpty()) {
+                player.getInventory().setItem(i, new ItemStack(item, count));
+                return;
+            }
+        }
+
+        for (int i = 0; i < items.size(); i++) {
+            if (i == shulkerSlot) continue;
+            ItemStack s = items.get(i);
+            if (!ShulkerUtil.isShulkerBox(s) || s.getCount() > 1) continue;
+            var contents = ShulkerUtil.getContents(s);
+            for (int sub = 0; sub < contents.size(); sub++) {
+                if (contents.get(sub).isEmpty()) {
+                    ShulkerUtil.setSlot(s, sub, new ItemStack(item, count));
+                    return;
+                }
+            }
+        }
+
+        LOGGER.warn("ItemTransformer: could not place {} leftover {} item(s)", count, item);
+    }
+
     private static boolean isValidSlot(int slot) {
         return slot >= 0 && slot <= 39;
     }
