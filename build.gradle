@@ -15,7 +15,7 @@ plugins {
 
 apply plugin: 'fabric-loom'
 
-version = "1.1"
+version = "1.2"
 
 repositories {
     maven { name = "Fabric"; url = "https://maven.fabricmc.net/" }
@@ -37,6 +37,9 @@ dependencies {
 
     // TRender (RenderContext used by ItemSwapper's palette widgets)
     implementation "dev.tr7zw:TRender:1.0.17-26.3-fabric-SNAPSHOT"
+
+    // ModMenu API (config screen entry point)
+    compileOnly files("libs/modmenu-22.0.0-alpha.7.jar")
 }
 
 processResources {

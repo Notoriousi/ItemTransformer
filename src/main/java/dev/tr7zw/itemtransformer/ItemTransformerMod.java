@@ -4,6 +4,7 @@ import dev.tr7zw.itemtransformer.network.ServerProbePayload;
 import dev.tr7zw.itemtransformer.network.ServerProbeResponsePayload;
 import dev.tr7zw.itemtransformer.network.TransformItemPayload;
 import dev.tr7zw.itemtransformer.network.TransformShulkerPayload;
+import dev.tr7zw.itemtransformer.config.ItemTransformerConfig;
 import dev.tr7zw.itemtransformer.util.ItemFamilyUtil;
 import dev.tr7zw.itemtransformer.util.ShulkerUtil;
 import net.fabricmc.api.ModInitializer;
@@ -83,9 +84,11 @@ public class ItemTransformerMod implements ModInitializer {
                     }
                     LOGGER.info("ItemTransformer: aggregated {} -> {} (held {})",
                         sourceItem, targetItem, heldSlot);
-                    player.sendSystemMessage(
-                        Component.literal("\u00a7aTransformed to " +
-                            BuiltInRegistries.ITEM.getKey(targetItem)), true);
+                    if (ItemTransformerConfig.get().showTransformFeedback) {
+                        player.sendSystemMessage(
+                            Component.literal("\u00a7aTransformed to " +
+                                BuiltInRegistries.ITEM.getKey(targetItem)), true);
+                    }
                     return;
                 }
 
@@ -126,9 +129,11 @@ public class ItemTransformerMod implements ModInitializer {
                         sourceItem, sourceSlot, targetItem, heldSlot, toCount);
                 }
 
-                player.sendSystemMessage(
-                    Component.literal("\u00a7aTransformed to " +
-                        BuiltInRegistries.ITEM.getKey(targetItem)), true);
+                if (ItemTransformerConfig.get().showTransformFeedback) {
+                    player.sendSystemMessage(
+                        Component.literal("\u00a7aTransformed to " +
+                            BuiltInRegistries.ITEM.getKey(targetItem)), true);
+                }
             });
 
             // Server handler: shulker transform.
@@ -204,9 +209,11 @@ public class ItemTransformerMod implements ModInitializer {
 
                 LOGGER.info("ItemTransformer: [shulker] {} (box={} sub={}) -> {} (held={}, count {})",
                     sourceItem, shulkerSlot, shulkerSubSlot, targetItem, heldSlot, toCount);
-                player.sendSystemMessage(
-                    Component.literal("\u00a7aTransformed to " +
-                        BuiltInRegistries.ITEM.getKey(targetItem) + " (from shulker)"), true);
+                if (ItemTransformerConfig.get().showTransformFeedback) {
+                    player.sendSystemMessage(
+                        Component.literal("\u00a7aTransformed to " +
+                            BuiltInRegistries.ITEM.getKey(targetItem) + " (from shulker)"), true);
+                }
             });
 
             // Server handler: probe response.

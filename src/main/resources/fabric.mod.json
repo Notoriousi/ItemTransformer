@@ -8,7 +8,9 @@
         "Notoriousi"
     ],
     "contact": {
-        "sources": "https://github.com/Notoriousi/ItemTransformer"
+        "sources": "https://github.com/Notoriousi/ItemTransformer",
+        "homepage": "https://github.com/Notoriousi/ItemTransformer",
+        "issues": "https://github.com/Notoriousi/ItemTransformer/issues"
     },
     "license": "LGPL-3.0-only",
     "icon": "",
@@ -19,6 +21,9 @@
         ],
         "client": [
             "dev.tr7zw.itemtransformer.ItemTransformerClientMod"
+        ],
+        "modmenu": [
+            "dev.tr7zw.itemtransformer.ItemTransformerModMenu"
         ]
     },
     "mixins": [
@@ -30,5 +35,8 @@
         "java": ">=25",
         "fabric-api": "*",
         "itemswapper": "*"
+    },
+    "suggests": {
+        "modmenu": "*"
     }
 }

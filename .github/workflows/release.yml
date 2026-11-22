@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. v1.1.0)"
+        description: "Tag to release (e.g. v1.2.0)"
         required: true
-        default: "v1.1.0"
+        default: "v1.2.0"
 
 permissions:
   contents: write
@@ -66,9 +66,10 @@ jobs:
           body: |
             ItemTransformer ${{ env.RELEASE_TAG }} — a quality-of-life Fabric addon for ItemSwapper.
 
-            **What's new in 1.1**
-            - **Fix: item duplication with Stackable Empty Shulkers** — stacked shulker boxes (count > 1) were treated as a single container, duplicating items into every box in the stack or desyncing client/server. All shulker interactions now require a single (count = 1) box.
-            - **Potential dupe fixes** — client-provided slot indices are now validated (0–39), and storing a shulker box inside another shulker box is rejected (vanilla forbids this; it desyncs).
+            **What's new in 1.2**
+            - **Dead code cleanup** — removed unused classes and fields.
+            - **Comments cleanup** — tidied up stale/unnecessary comments.
+            - **ModMenu support** — added a ModMenu entry with a TRender-based config screen (toggle + Done/Reset buttons) and homepage/issues links in the mod info panel.
 
             **Requirements**
             - Minecraft 26.3
